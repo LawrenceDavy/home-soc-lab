@@ -1,0 +1,13 @@
+# OS noise
+.DS_Store
+Thumbs.db
+
+# Never commit these — they identify the Azure tenant and subscription
+*.credentials
+*secrets*
+azure-ids.txt
+
+# Large binaries do not belong in a git repo
+*.iso
+*.qcow2
+*.vhdx
