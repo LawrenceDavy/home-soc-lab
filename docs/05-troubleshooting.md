@@ -79,4 +79,57 @@ Once that finished, I reran the original installation command and all packages i
 
 ---
 
+## 5. UFW blocking libvirt DHCP and NAT
+
+**When:** During the Windows 11 setup. I got to the "Let's connect you to a network" screen, but the VM couldn't get an internet connection even though the VirtIO network driver was installed.
+
+**Symptom:** The network adapter was detected correctly, but Windows only got a self-assigned `169.254.x.x` IP address instead of one from DHCP. Running `virsh net-dhcp-leases default` showed no DHCP lease, but `tcpdump` on the host proved the DHCP requests were reaching the `virbr0` bridge.
+
+**Cause:** After checking everything step by step, I found that UFW was blocking libvirt's virtual network in two different ways.
+
+- UFW was blocking inbound UDP traffic on port 67, which is needed for DHCP. Since `dnsmasq` acts as the DHCP server for the virtual network, Windows could never get an IP address.
+- UFW was also set to `Default: deny (routed)`, which blocked forwarded traffic. This meant that even after fixing DHCP, the VM still wouldn't be able to access the internet through NAT.
+
+**Fix:** I only allowed the required traffic on the `virbr0` interface instead of opening it on every network interface.
+
+```bash
+sudo ufw allow in on virbr0 to any port 67 proto udp
+sudo ufw allow in on virbr0 to any port 53 proto udp
+sudo ufw allow in on virbr0 to any port 53 proto tcp
+sudo ufw route allow in on virbr0
+sudo ufw reload
+```
+
+**What I learned:** This took much longer than expected because every layer looked like it was working. I checked the bridge, confirmed `dnsmasq` was running, captured packets with `tcpdump`, and even ran `dnsmasq` in the foreground to watch what it was doing. Only after checking the raw `nftables` rules did I find that UFW was silently dropping the traffic. It was a good reminder that just because one part of the network is working doesn't mean another firewall rule isn't causing the real problem.
+
+---
+
+## 6. MSI Error 1719 / 0x80070534 during VirtIO Guest Tools install
+
+**When:** The first time I tried to install `virtio-win-guest-tools.exe` after finishing the Windows setup and logging into the desktop.
+
+**Symptom:** The installer failed almost immediately with the following errors:
+
+```
+Setup Failed... 0x80070643 - Fatal error during installation.
+
+Error 1719. The Windows Installer Service could not be accessed.
+Could not set proxy blanket on CA proxy interface.
+Error: 0x80070534
+```
+
+**Cause:** The Windows account had only just been created during setup. Sometimes Windows hasn't fully finished creating and registering the new account's security information, so the Windows Installer service can't correctly apply permissions. This is a known timing issue rather than a problem with the VirtIO drivers themselves.
+
+**Fix:** I restarted the virtual machine and ran the installer again. The installation completed successfully without making any other changes, confirming it was only a temporary Windows issue.
+
+**Extra issue found:** While checking everything afterwards, I noticed I had accidentally named the account **ladadmin** instead of **labadmin** during Windows setup. I renamed it using:
+
+```cmd
+wmic useraccount where name='ladadmin' rename labadmin
+```
+
+Because my original clean snapshot had been taken before I noticed the typo, I deleted it and created a new baseline snapshot after the account was renamed so the lab documentation matched the actual environment.
+
+**What I learned:** Not every installer error means something is broken. Sometimes Windows simply needs a restart to finish setting up a new user account. It also reminded me to double-check usernames before taking snapshots, as it's much easier to fix mistakes before creating restore points.
+
 *This log will continue as I work through the remaining milestones and document any additional issues I encounter.*
