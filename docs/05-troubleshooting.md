@@ -132,4 +132,16 @@ Because my original clean snapshot had been taken before I noticed the typo, I d
 
 **What I learned:** Not every installer error means something is broken. Sometimes Windows simply needs a restart to finish setting up a new user account. It also reminded me to double-check usernames before taking snapshots, as it's much easier to fix mistakes before creating restore points.
 
+
+## 7. Microsoft Defender blocking the `certutil` attack simulation
+
+**When:** While testing one of the attack simulations that used `certutil` to download a file.
+
+**Symptom:** Running the command returned **"Access is denied"**, making it look like `certutil` itself wasn't working.
+
+**Cause:** After testing further, I confirmed that `certutil` wasn't actually broken because commands like `certutil -?` worked normally. The real problem was Microsoft Defender. Defender has a built-in detection for the common attacker technique of using `certutil` as a downloader (a Living-off-the-Land Binary, or LOLBin). Checking Defender with `Get-MpThreatDetection` showed that it had detected the exact command I was trying to run (ThreatID **2147726914**) and blocked it before the process could even start.
+
+**Current status:** I decided not to work around this straight away. Instead, I parked it for **Milestone 5**, where the focus is on attack simulations and detection testing. At that point I'll either create a temporary Defender exclusion for the testing window or use a different technique that produces the same type of detection without Defender stopping it immediately.
+
+**What I learned:** At first it looked like a problem with `certutil`, but it turned out to be Defender doing exactly what it's supposed to do. This was a good reminder not to assume the first error message tells the whole story, and to check security logs before spending time troubleshooting the wrong thing.
 *This log will continue as I work through the remaining milestones and document any additional issues I encounter.*
